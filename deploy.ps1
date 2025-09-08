@@ -27,11 +27,12 @@ ssh "$SERVER_USER@$SERVER_IP" "mkdir -p /opt/telegram-translation-bot"
 
 # Copy application files to server
 Write-Host "Copying application files to server..."
-scp -r ./* "$SERVER_USER@$SERVER_IP:/opt/telegram-translation-bot/"
+scp -r ./* "${SERVER_USER}@${SERVER_IP}:/opt/telegram-translation-bot/"
 
 # Connect to server and run setup commands
 Write-Host "Setting up application on server..."
-ssh "$SERVER_USER@$SERVER_IP" @"
+# Use a script block to avoid variable substitution issues in heredoc
+$setupScript = @"
 # Update system packages
 apt update && apt upgrade -y
 
@@ -43,6 +44,26 @@ chmod 600 /opt/telegram-translation-bot/.env
 
 # Create logs directory
 mkdir -p /opt/telegram-translation-bot/logs
+
+# Check if configured port is already in use
+CONFIGURED_PORT=\${HOST_PORT:-3000}
+echo "Checking if port \$CONFIGURED_PORT is already in use..."
+if lsof -Pi :\${CONFIGURED_PORT} -sTCP:LISTEN -t >/dev/null; then
+    echo "Port \$CONFIGURED_PORT is already in use. Attempting to resolve conflict..."
+    
+    # Check if it's a Docker container
+    if docker ps | grep -q "\${CONFIGURED_PORT}->\${CONFIGURED_PORT}"; then
+        echo "Stopping existing Docker container using port \$CONFIGURED_PORT..."
+        docker stop \$(docker ps | grep "\${CONFIGURED_PORT}->\${CONFIGURED_PORT}" | awk '{print \$1}')
+    else
+        # Kill the process using the configured port
+        echo "Killing process using port \$CONFIGURED_PORT..."
+        kill -9 \$(lsof -t -i:\${CONFIGURED_PORT})
+    fi
+    
+    # Wait a moment for the port to be released
+    sleep 5
+fi
 
 # Copy Nginx configuration
 cp /opt/telegram-translation-bot/nginx.conf /etc/nginx/sites-available/telegram-translation-bot
@@ -68,6 +89,9 @@ else
     exit 1
 fi
 "@
+
+# Execute the setup script on the remote server
+$setupScript | ssh "$SERVER_USER@$SERVER_IP" 'bash -s'
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Deployment script completed!"

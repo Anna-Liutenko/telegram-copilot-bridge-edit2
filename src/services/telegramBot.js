@@ -97,16 +97,29 @@ class TelegramBot {
   }
 
   /**
-   * Start the bot
+   * Start the bot in either polling or webhook mode
+   * @param {string} webhookUrl - Optional webhook URL for webhook mode
+   * @param {number} port - Port for webhook server (only used in webhook mode)
    */
-  start() {
+  start(webhookUrl, port) {
     // Enable graceful stop
     process.once('SIGINT', () => this.bot.stop('SIGINT'));
     process.once('SIGTERM', () => this.bot.stop('SIGTERM'));
     
-    // Launch the bot
-    this.bot.launch();
-    console.log('Telegram bot started');
+    if (webhookUrl && port) {
+      // Launch the bot in webhook mode
+      this.bot.launch({
+        webhook: {
+          domain: webhookUrl,
+          port: port
+        }
+      });
+      logger.info(`Telegram bot started in webhook mode at ${webhookUrl}`);
+    } else {
+      // Launch the bot in polling mode (default)
+      this.bot.launch();
+      logger.info('Telegram bot started in polling mode');
+    }
   }
 
   /**
@@ -114,7 +127,15 @@ class TelegramBot {
    */
   stop() {
     this.bot.stop();
-    console.log('Telegram bot stopped');
+    logger.info('Telegram bot stopped');
+  }
+  
+  /**
+   * Get the bot's webhook callback middleware
+   * @returns {Function} Express middleware for handling webhooks
+   */
+  getWebhookCallback() {
+    return this.bot.webhookCallback('/telegram/webhook');
   }
 }
 

@@ -69,6 +69,62 @@ To run the bot in a Docker container:
    docker run -d --name telegram-translation-bot --env-file .env -p 3000:3000 telegram-translation-bot
    ```
 
+## Deployment
+
+### Automated Deployment
+
+You can use the provided deployment scripts:
+
+For Linux/Mac:
+```bash
+./deploy.sh
+```
+
+For Windows:
+```powershell
+./deploy.ps1
+```
+
+### Manual Deployment
+
+1. Copy all files to your server
+2. Install required packages:
+   ```bash
+   apt update && apt upgrade -y
+   apt install -y docker.io docker-compose nginx certbot python3-certbot-nginx
+   ```
+3. Set proper permissions for the environment file:
+   ```bash
+   chmod 600 .env
+   ```
+4. Create logs directory:
+   ```bash
+   mkdir -p logs
+   ```
+5. Configure Nginx:
+   ```bash
+   cp nginx.conf /etc/nginx/sites-available/telegram-translation-bot
+   ln -sf /etc/nginx/sites-available/telegram-translation-bot /etc/nginx/sites-enabled/
+   nginx -t && systemctl reload nginx
+   ```
+6. Obtain SSL certificate:
+   ```bash
+   certbot --nginx -d your-domain.com --non-interactive --agree-tos --email your-email@domain.com
+   ```
+7. Start the Docker containers:
+   ```bash
+   docker-compose up -d
+   ```
+
+## Port Conflict Resolution
+
+If you encounter the error "Error starting userland proxy: listen tcp4 0.0.0.0:3000: bind: address already in use", refer to the PORT_CONFLICT_RESOLUTION.md file for detailed solutions.
+
+Common solutions include:
+1. Changing the port mapping in docker-compose.yml
+2. Identifying and stopping conflicting processes
+3. Using environment variables for flexible port configuration
+
 ## How to Use the Bot
 
 1. Start a conversation with your bot on Telegram

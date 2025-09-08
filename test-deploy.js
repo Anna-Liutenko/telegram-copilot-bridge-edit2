@@ -28,7 +28,7 @@ for (const file of requiredFiles) {
 
 // Check that docker-compose.yml has the correct content
 const dockerComposeContent = fs.readFileSync(path.join(__dirname, 'docker-compose.yml'), 'utf8');
-if (dockerComposeContent.includes('telegram-bot') && dockerComposeContent.includes('3000:3000')) {
+if (dockerComposeContent.includes('telegram-bot') && (dockerComposeContent.includes('3000:3000') || dockerComposeContent.includes('HOST_PORT'))) {
   console.log('✓ docker-compose.yml has correct content');
 } else {
   console.log('✗ docker-compose.yml is missing required configuration');

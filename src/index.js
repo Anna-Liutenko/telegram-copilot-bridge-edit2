@@ -20,6 +20,9 @@ const telegramBot = new TelegramBot();
 // Middleware
 app.use(express.json());
 
+// Webhook endpoint for Telegram
+app.use('/telegram/webhook', telegramBot.getWebhookCallback());
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   logger.info('Health check endpoint called');
@@ -44,9 +47,16 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   logger.info(`Server is running on port ${PORT}`);
   
-  // Start Telegram bot
-  telegramBot.start();
-  logger.info('Telegram bot started');
+  // Check if webhook mode is enabled
+  if (process.env.WEBHOOK_URL && process.env.WEBHOOK_PORT) {
+    // Start Telegram bot in webhook mode
+    telegramBot.start(process.env.WEBHOOK_URL, parseInt(process.env.WEBHOOK_PORT));
+    logger.info(`Telegram bot started in webhook mode at ${process.env.WEBHOOK_URL}`);
+  } else {
+    // Start Telegram bot in polling mode (default)
+    telegramBot.start();
+    logger.info('Telegram bot started in polling mode');
+  }
 });
 
 // Graceful shutdown

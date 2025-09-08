@@ -23,5 +23,11 @@ module.exports = {
   retry: {
     maxRetries: process.env.MAX_RETRIES || 3,
     baseDelay: process.env.BASE_DELAY || 1000, // 1 second
+  },
+  
+  // Webhook configuration
+  webhook: {
+    url: process.env.WEBHOOK_URL,
+    port: process.env.WEBHOOK_PORT
   }
 };
