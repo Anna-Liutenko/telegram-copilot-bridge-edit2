@@ -21,7 +21,7 @@ class TelegramBot {
     // Handle /start command
     this.bot.start((ctx) => {
       logger.info('Bot started', { userId: ctx.from.id });
-      ctx.reply('Welcome to the Translation Bot! Please tell me which languages you want to use for translation. For example: "I want to use English, Russian, and Korean"');
+      ctx.reply('Welcome to the Translation Bot! Please tell me which 2-3 languages you want to use for translation. For example: "I want to use English, Russian, and Korean"');
     });
 
     // Handle /help command
@@ -38,7 +38,7 @@ class TelegramBot {
         const languages = session.selectedLanguages.map(lang => `${lang.name} (${lang.code})`).join(', ');
         ctx.reply(`Your selected languages: ${languages}`);
       } else {
-        ctx.reply('You have not set up any languages yet. Please tell me which languages you want to use for translation.');
+        ctx.reply('You have not set up any languages yet. Please tell me which 2-3 languages you want to use for translation.');
       }
     });
 
@@ -46,7 +46,14 @@ class TelegramBot {
     this.bot.command('clear', (ctx) => {
       const userId = ctx.from.id.toString();
       sessionManager.clearSession(userId);
-      ctx.reply('Your language preferences have been cleared. Please tell me which languages you want to use for translation.');
+      ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
+    });
+
+    // Handle /reset command
+    this.bot.command('reset', (ctx) => {
+      const userId = ctx.from.id.toString();
+      sessionManager.clearSession(userId);
+      ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
     });
 
     // Handle text messages

@@ -41,6 +41,11 @@ Response:`;
       // Validate the response
       const languages = LanguagesArraySchema.parse(response);
       
+      // Validate number of languages (2-3)
+      if (languages.length < 2 || languages.length > 3) {
+        throw new LanguageSetupError(`Please select exactly 2-3 languages for translation. You selected ${languages.length} languages.`);
+      }
+      
       // Save to session
       const session = sessionManager.getSession(userId);
       session.selectedLanguages = languages;

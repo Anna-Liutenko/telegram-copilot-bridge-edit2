@@ -55,13 +55,13 @@ Update the Telegram bot commands to match the requirements:
 
 Note: The current `/clear` command serves the same purpose as the requested `/reset` command. We can either rename `/clear` to `/reset` or implement both commands with the same functionality.
 
-### 2. Language Selection Algorithm
+### 2. Language Selection Validation
 
-The language selection algorithm should:
-1. Prompt the user to specify 2-3 languages
-2. Process the user's natural language request using the LLM
-3. Extract and validate the languages
-4. Store the selected languages in the session
+The language selection process needs to validate that users select exactly 2-3 languages:
+
+1. After the LLM processes the language request and returns the languages array
+2. Validate that the array contains 2-3 languages
+3. If not, throw a LanguageSetupError with an appropriate message
 
 ### 3. Translation Workflow
 
@@ -75,31 +75,21 @@ After language selection, the bot should:
 
 ### 1. Update Telegram Bot Commands
 
-Modify `src/services/telegramBot.js`:
+Modify `src/services/telegramBot.js` to:
+
+a. Update the `/start` command message to clearly indicate 2-3 languages are required
+b. Add a new `/reset` command that clears session and prompts for language selection
+
+c. Update the existing `/clear` command to work the same as `/reset` or remove it in favor of `/reset`
+
+### 2. Add Language Count Validation
+
+Modify the `setupLanguages` method in `src/services/translationService.js` to validate the number of languages:
 
 ```javascript
-// Handle /start command
-this.bot.start((ctx) => {
-  logger.info('Bot started', { userId: ctx.from.id });
-  ctx.reply('Welcome to the Translation Bot! Please tell me which 2-3 languages you want to use for translation. For example: "I want to use English, Russian, and Korean"');
-});
-
-// Handle /reset command (replacing /clear)
-this.bot.command('reset', (ctx) => {
-  const userId = ctx.from.id.toString();
-  sessionManager.clearSession(userId);
-  ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
-});
-```
-
-### 2. Enhance Language Setup Validation
-
-Update the language setup process in `src/services/translationService.js` to validate that users select 2-3 languages:
-
-```javascript
-// In the setupLanguages method, after parsing the languages response:
+// After parsing the languages response with Zod validation
 if (languages.length < 2 || languages.length > 3) {
-  throw new LanguageSetupError('Please select 2-3 languages for translation.');
+  throw new LanguageSetupError('Please select exactly 2-3 languages for translation. You selected ' + languages.length + ' languages.');
 }
 ```
 
@@ -115,17 +105,18 @@ flowchart TD
     B --> C[User specifies 2-3 languages]
     C --> D[Bot processes language request via LLM]
     D --> E[Validate 2-3 languages selected]
-    E --> F[Store languages in session]
-    F --> G[Bot confirms language selection]
+    E -->|Valid| F[Store languages in session]
+    E -->|Invalid| G[Ask user to select 2-3 languages]
+    F --> H[Bot confirms language selection]
     
-    H[User sends /reset] --> I[Clear session languages]
-    I --> B
+    I[User sends /reset] --> J[Clear session languages]
+    J --> B
     
-    J[User sends text message] --> K[Check if languages selected]
-    K -->|No| B
-    K -->|Yes| L[Detect source language]
-    L --> M[Translate to other languages]
-    M --> N[Send translations to user]
+    K[User sends text message] --> L[Check if languages selected]
+    L -->|No| B
+    L -->|Yes| M[Detect source language]
+    M --> N[Translate to other languages]
+    N --> O[Send translations to user]
 ```
 
 ## Data Models
@@ -155,7 +146,7 @@ flowchart TD
 ## Error Handling
 
 1. **Language Selection Errors**:
-   - If user selects fewer than 2 or more than 3 languages, prompt again
+   - If user selects fewer than 2 or more than 3 languages, prompt again with clear instructions
    - If LLM fails to process language request, provide clear error message
 
 2. **Translation Errors**:
@@ -175,3 +166,56 @@ The implementation should validate:
 2. Test edge cases (1 language, 4+ languages)
 3. Test translation workflow with different language combinations
 4. Test session management (expiration, clearing)
+5. Test both `/reset` and `/clear` commands
+
+## Implementation Details
+
+### Current Flow Analysis
+
+The current implementation already follows most of the required flow:
+1. When a user sends `/start`, they receive a welcome message asking for language preferences
+2. The first message is treated as a language setup request
+3. The LLM processes the language request and returns a structured JSON response
+4. The response is validated using Zod schema
+5. Languages are stored in the session
+6. Subsequent messages are processed as translation requests
+
+### Required Changes
+
+1. **Update `/start` command message** to specify 2-3 languages are required
+2. **Add `/reset` command** that clears session and prompts for language selection
+3. **Add language count validation** in the `setupLanguages` method
+4. **Update error messages** to be more user-friendly
+
+### Code Modifications
+
+#### Telegram Bot (`src/services/telegramBot.js`)
+
+1. Update `/start` command response:
+   ```javascript
+   ctx.reply('Welcome to the Translation Bot! Please tell me which 2-3 languages you want to use for translation. For example: "I want to use English, Russian, and Korean"');
+   ```
+
+2. Add `/reset` command:
+   ```javascript
+   this.bot.command('reset', (ctx) => {
+     const userId = ctx.from.id.toString();
+     sessionManager.clearSession(userId);
+     ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
+   });
+   ```
+
+#### Translation Service (`src/services/translationService.js`)
+
+1. Add language count validation in `setupLanguages` method:
+   ```javascript
+   // Validate the response
+   const languages = LanguagesArraySchema.parse(response);
+   
+   // Validate number of languages (2-3)
+   if (languages.length < 2 || languages.length > 3) {
+     throw new LanguageSetupError(`Please select exactly 2-3 languages for translation. You selected ${languages.length} languages.`);
+   }
+   ```
+
+This approach maintains the existing architecture while adding the required validation and commands.
