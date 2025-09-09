@@ -5,10 +5,11 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files for dependency installation
-COPY package*.json ./
+COPY package.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Ensure the official npm registry is used and install production dependencies
+RUN npm config set registry https://registry.npmjs.org/
+RUN npm install --omit=dev --no-audit --no-fund
 
 # Copy application code
 COPY . .

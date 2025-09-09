@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(ssh:*)",
+      "Bash(powershell:*)",
+      "Bash(scp:*)",
+      "Bash(scriptsquick-deploy.ps1)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

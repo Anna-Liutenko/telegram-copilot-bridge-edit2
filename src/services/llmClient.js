@@ -31,12 +31,16 @@ class LLMClient {
 
     for (let i = 0; i <= maxRetries; i++) {
       try {
-        const response = await this.openai.chat.completions.create({
+        const requestParams = {
           model: model,
           messages: [{ role: 'user', content: prompt }],
-          temperature: temperature,
           ...(jsonResponse ? { response_format: { type: 'json_object' } } : {})
-        });
+        };
+
+        // Add temperature parameter
+        requestParams.temperature = temperature;
+
+        const response = await this.openai.chat.completions.create(requestParams);
 
         let content = response.choices[0].message.content.trim();
         

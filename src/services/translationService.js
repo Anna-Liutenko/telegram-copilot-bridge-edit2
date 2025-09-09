@@ -7,39 +7,80 @@ const logger = require('../utils/logger');
 class TranslationService {
   /**
    * Process user input to set up languages
-   * @param {string} userId - The user's ID
+   * @param {string} chatId - The chat's ID
    * @param {string} userInput - The user's natural language request for languages
    * @returns {Promise<object>} - The processed languages
    */
-  async setupLanguages(userId, userInput) {
+  async setupLanguages(chatId, userInput) {
     // Create the prompt for language processing
     const prompt = `
-You are a language extraction assistant. Your task is to identify the languages a user wants to use and return them in a structured JSON format.
+You are a language extraction assistant. Your task is to identify ALL languages a user wants to use and return them as a JSON array.
 
-Instructions:
-1. Extract all languages mentioned by the user
-2. For each language, provide:
-   - "code": Two-letter ISO 639-1 code in uppercase
-   - "name": Full English language name with capital first letter
-3. Return ONLY a JSON array of language objects
-4. Do not include any other text or explanations
+CRITICAL REQUIREMENTS:
+1. Extract ALL languages mentioned by the user (not just one)
+2. Always return a JSON array, even for one language
+3. Each language object must have: {"code": "XX", "name": "Language"}
+4. Use two-letter ISO 639-1 codes in uppercase
+5. Return ONLY the JSON array, no other text
 
 Examples:
-User: "I want to use Russian, English, and maybe Japanese"
+User: "English, Russian, Serbian"
+Response: [{"code": "EN", "name": "English"}, {"code": "RU", "name": "Russian"}, {"code": "SR", "name": "Serbian"}]
+
+User: "I want to use Russian, English, and Japanese"
 Response: [{"code": "RU", "name": "Russian"}, {"code": "EN", "name": "English"}, {"code": "JA", "name": "Japanese"}]
 
-User: "I need Spanish and French"
+User: "Spanish and French"
 Response: [{"code": "ES", "name": "Spanish"}, {"code": "FR", "name": "French"}]
 
-User: "${userInput}"
-Response:`;
+User input: "${userInput}"
+JSON array:`;
 
     try {
-      // Call LLM with JSON response format
-      const response = await llmClient.callLLM(prompt, { jsonResponse: true });
+      // Call LLM with text response and parse manually (JSON mode seems problematic with gpt-4o-mini)
+      const response = await llmClient.callLLM(prompt, { 
+        jsonResponse: false, 
+        temperature: 0,
+        maxRetries: 2 
+      });
+      
+      // Remove debug logging in production
+      
+      // Parse JSON from text response
+      let languagesData;
+      try {
+        // Try to extract JSON array from text response
+        const jsonMatch = response.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          languagesData = JSON.parse(jsonMatch[0]);
+        } else {
+          // Fallback: try to parse the entire response
+          languagesData = JSON.parse(response);
+        }
+      } catch (parseError) {
+        logger.error('Failed to parse JSON from OpenAI response', { response, parseError: parseError.message });
+        throw new Error('Invalid JSON response from OpenAI');
+      }
+      
+      // Handle potential response wrapping - sometimes OpenAI returns { languages: [...] } instead of [...]
+      if (languagesData && typeof languagesData === 'object' && !Array.isArray(languagesData)) {
+        // Check if response has common wrapper keys
+        if (languagesData.languages) {
+          languagesData = languagesData.languages;
+        } else if (languagesData.result) {
+          languagesData = languagesData.result;
+        } else if (languagesData.data) {
+          languagesData = languagesData.data;
+        } else if (languagesData.response) {
+          languagesData = languagesData.response;
+        } else if (languagesData.code && languagesData.name) {
+          // Single language object returned instead of array - wrap it in array
+          languagesData = [languagesData];
+        }
+      }
       
       // Validate the response
-      const languages = LanguagesArraySchema.parse(response);
+      const languages = LanguagesArraySchema.parse(languagesData);
       
       // Validate number of languages (2-3)
       if (languages.length < 2 || languages.length > 3) {
@@ -47,10 +88,10 @@ Response:`;
       }
       
       // Save to session
-      const session = sessionManager.getSession(userId);
+      const session = sessionManager.getSession(chatId);
       session.selectedLanguages = languages;
-      sessionManager.setSession(userId, session);
-      logger.info(`Languages set up for user ${userId}`, { languages });
+      sessionManager.setSession(chatId, session);
+      // Languages configured - no logging needed in production
       
       return languages;
     } catch (error) {
@@ -135,20 +176,20 @@ Translated text:`;
 
   /**
    * Process a translation request through the full pipeline
-   * @param {string} userId - The user's ID
+   * @param {string} chatId - The chat's ID
    * @param {string} userInput - The user's input
    * @returns {Promise<object>} - The translation results
    */
-  async processTranslation(userId, userInput) {
+  async processTranslation(chatId, userInput) {
     try {
-      logger.info(`Processing translation for user ${userId}`);
-      // Get user's session
-      const session = sessionManager.getSession(userId);
+      // Processing translation
+      // Get chat's session
+      const session = sessionManager.getSession(chatId);
       
       // If no languages are set up, treat input as language setup
       if (!session.selectedLanguages || session.selectedLanguages.length === 0) {
-        logger.info(`Setting up languages for user ${userId}`);
-        const languages = await this.setupLanguages(userId, userInput);
+        // Setting up languages
+        const languages = await this.setupLanguages(chatId, userInput);
         return {
           type: 'language_setup',
           message: 'Languages have been set up successfully!',
@@ -157,11 +198,11 @@ Translated text:`;
       }
       
       // Detect source language
-      logger.info(`Detecting source language for user ${userId}`);
+      // Detecting source language
       const sourceLanguage = await this.detectSourceLanguage(userInput);
       
       // Translate to each selected language
-      logger.info(`Translating text for user ${userId} to ${session.selectedLanguages.length} languages`);
+      // Translating text
       const translations = [];
       for (const language of session.selectedLanguages) {
         // Skip if source and target are the same

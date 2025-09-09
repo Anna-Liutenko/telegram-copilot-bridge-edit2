@@ -1,4 +1,3 @@
-const axios = require('axios');
 const dotenv = require('dotenv');
 
 // Load environment variables
@@ -6,7 +5,7 @@ dotenv.config();
 
 // Get bot token and webhook URL from environment variables
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_URL = process.env.WEBHOOK_URL;
+const WEBHOOK_URL = process.env.WEBHOOK_URL; // full URL like https://domain/telegram/webhook
 
 if (!BOT_TOKEN) {
   console.error('Error: TELEGRAM_BOT_TOKEN is not set in environment variables');
@@ -21,36 +20,36 @@ if (!WEBHOOK_URL) {
 
 async function setupWebhook() {
   try {
-    const webhookEndpoint = `${WEBHOOK_URL}/telegram/webhook`;
-    console.log(`Setting webhook to: ${webhookEndpoint}`);
-    
-    const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
-      url: webhookEndpoint
+    console.log(`Setting webhook to: ${WEBHOOK_URL}`);
+    const fetchRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: WEBHOOK_URL })
     });
-    
-    if (response.data.ok) {
+    const data = await fetchRes.json();
+    if (data.ok) {
       console.log('✅ Webhook setup successful!');
-      console.log('Webhook info:', response.data);
+      console.log('Webhook info:', data);
     } else {
-      console.error('❌ Webhook setup failed:', response.data);
+      console.error('❌ Webhook setup failed:', data);
     }
   } catch (error) {
-    console.error('❌ Error setting up webhook:', error.response?.data || error.message);
+    console.error('❌ Error setting up webhook:', error.message);
   }
 }
 
 async function getWebhookInfo() {
   try {
-    const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
-    
-    if (response.data.ok) {
+    const fetchRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+    const data = await fetchRes.json();
+    if (data.ok) {
       console.log('Current webhook info:');
-      console.log(JSON.stringify(response.data.result, null, 2));
+      console.log(JSON.stringify(data.result, null, 2));
     } else {
-      console.error('Error getting webhook info:', response.data);
+      console.error('Error getting webhook info:', data);
     }
   } catch (error) {
-    console.error('Error getting webhook info:', error.response?.data || error.message);
+    console.error('Error getting webhook info:', error.message);
   }
 }
 

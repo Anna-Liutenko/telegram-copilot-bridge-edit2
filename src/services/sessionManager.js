@@ -8,12 +8,12 @@ class SessionManager {
   }
 
   /**
-   * Get a user's session data
-   * @param {string} userId - The user's ID
-   * @returns {object} - The user's session data
+   * Get a chat's session data
+   * @param {string} chatId - The chat's ID
+   * @returns {object} - The chat's session data
    */
-  getSession(userId) {
-    const session = this.sessions.get(userId);
+  getSession(chatId) {
+    const session = this.sessions.get(chatId);
     
     // If session exists and is not expired, return it
     if (session && !this.isSessionExpired(session)) {
@@ -24,33 +24,34 @@ class SessionManager {
     
     // Return default session data if no valid session exists
     return {
-      userId: userId,
+      chatId: chatId,
       selectedLanguages: [],
-      lastActive: new Date()
+      lastActive: new Date(),
+      authenticated: false // Add authentication status
     };
   }
 
   /**
-   * Set a user's session data
-   * @param {string} userId - The user's ID
+   * Set a chat's session data
+   * @param {string} chatId - The chat's ID
    * @param {object} sessionData - The session data to store
    */
-  setSession(userId, sessionData) {
-    this.sessions.set(userId, {
+  setSession(chatId, sessionData) {
+    this.sessions.set(chatId, {
       ...sessionData,
-      userId: userId,
+      chatId: chatId,
       lastActive: new Date()
     });
-    logger.info(`Session set for user ${userId}`);
+    // Session updated
   }
 
   /**
-   * Clear a user's session
-   * @param {string} userId - The user's ID
+   * Clear a chat's session
+   * @param {string} chatId - The chat's ID
    */
-  clearSession(userId) {
-    this.sessions.delete(userId);
-    logger.info(`Session cleared for user ${userId}`);
+  clearSession(chatId) {
+    this.sessions.delete(chatId);
+    // Session cleared
   }
 
   /**
@@ -73,9 +74,9 @@ class SessionManager {
     const expiryTime = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
     
     // Filter out expired sessions
-    for (const [userId, session] of this.sessions) {
+    for (const [chatId, session] of this.sessions) {
       if ((now - new Date(session.lastActive)) > expiryTime) {
-        this.sessions.delete(userId);
+        this.sessions.delete(chatId);
       }
     }
     
@@ -88,6 +89,25 @@ class SessionManager {
    */
   getActiveSessionCount() {
     return this.getActiveSessions().size;
+  }
+
+  /**
+   * Authenticate a chat session
+   * @param {string} chatId - The chat's ID
+   */
+  authenticateSession(chatId) {
+    const session = this.getSession(chatId);
+    session.authenticated = true;
+    this.setSession(chatId, session);
+    // Session authenticated
+  }
+
+  /**
+   * Clear all sessions (for fresh start)
+   */
+  clearAllSessions() {
+    this.sessions.clear();
+    // All sessions cleared
   }
 }
 

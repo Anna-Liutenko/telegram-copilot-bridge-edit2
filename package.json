@@ -22,7 +22,6 @@
   },
   "homepage": "https://github.com/Anna-Liutenko/telegram-copilot-bridge-edit2#readme",
   "dependencies": {
-    "axios": "^1.11.0",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "jsonrepair": "^3.13.0",

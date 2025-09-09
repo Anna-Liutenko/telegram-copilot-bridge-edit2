@@ -1,4 +1,3 @@
-const axios = require('axios');
 const dotenv = require('dotenv');
 
 // Load environment variables
@@ -16,44 +15,50 @@ if (!BOT_TOKEN) {
 // Test functions
 async function getBotInfo() {
   try {
-    const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
-    console.log('Bot Info:', response.data);
-    return response.data;
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
+    const data = await res.json();
+    console.log('Bot Info:', data);
+    return data;
   } catch (error) {
-    console.error('Error getting bot info:', error.response?.data || error.message);
+    console.error('Error getting bot info:', error.message);
   }
 }
 
 async function getWebhookInfo() {
   try {
-    const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
-    console.log('Webhook Info:', response.data);
-    return response.data;
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`);
+    const data = await res.json();
+    console.log('Webhook Info:', data);
+    return data;
   } catch (error) {
-    console.error('Error getting webhook info:', error.response?.data || error.message);
+    console.error('Error getting webhook info:', error.message);
   }
 }
 
 async function setWebhook() {
   try {
     const url = `${WEBHOOK_URL}/telegram/webhook`;
-    const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
-      url: url
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
     });
-    console.log('Set Webhook Response:', response.data);
-    return response.data;
+    const data = await res.json();
+    console.log('Set Webhook Response:', data);
+    return data;
   } catch (error) {
-    console.error('Error setting webhook:', error.response?.data || error.message);
+    console.error('Error setting webhook:', error.message);
   }
 }
 
 async function deleteWebhook() {
   try {
-    const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`);
-    console.log('Delete Webhook Response:', response.data);
-    return response.data;
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook`, { method: 'POST' });
+    const data = await res.json();
+    console.log('Delete Webhook Response:', data);
+    return data;
   } catch (error) {
-    console.error('Error deleting webhook:', error.response?.data || error.message);
+    console.error('Error deleting webhook:', error.message);
   }
 }
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Translation Bot (Node.js)
+After=network.target
+
+[Service]
+Type=simple
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/telegram-translation-bot/.env
+WorkingDirectory=/opt/telegram-translation-bot
+ExecStart=/usr/bin/node /opt/telegram-translation-bot/src/index.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/opt/telegram-translation-bot/logs/combined.log
+StandardError=append:/opt/telegram-translation-bot/logs/error.log
+
+[Install]
+WantedBy=multi-user.target

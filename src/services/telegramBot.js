@@ -2,6 +2,7 @@ const { Telegraf } = require('telegraf');
 const config = require('../config/config');
 const translationService = require('./translationService');
 const sessionManager = require('./sessionManager');
+const rateLimitManager = require('./rateLimitManager');
 const { TranslationBotError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -20,20 +21,85 @@ class TelegramBot {
   setupBot() {
     // Handle /start command
     this.bot.start((ctx) => {
-      logger.info('Bot started', { userId: ctx.from.id });
-      ctx.reply('Welcome to the Translation Bot! Please tell me which 2-3 languages you want to use for translation. For example: "I want to use English, Russian, and Korean"');
+      const welcomeMessage = `🤖 **Welcome to Translation Bot!**
+
+I help you translate messages between languages quickly and easily.
+
+🎯 **Quick Start:**
+1. Tell me which 2-3 languages you want to use
+   Example: "English, Russian, Japanese"
+
+2. Send any message and I'll translate it automatically!
+
+💡 **Examples:**
+• "I want English, Spanish, French"
+• "Russian, Korean, Japanese"  
+• "English and German"
+
+Type /help for detailed instructions or just send me your languages to get started! 🚀`;
+
+      ctx.reply(welcomeMessage, { parse_mode: 'Markdown' });
     });
 
     // Handle /help command
     this.bot.help((ctx) => {
-      ctx.reply('Send me a message and I will translate it to your selected languages. To change languages, just tell me which languages you want to use.');
+      const helpMessage = `📖 **Translation Bot Help**
+
+🚀 **Getting Started:**
+1. First, set up your languages by telling me which 2-3 languages you want to use
+   Example: "English, Russian, Japanese"
+
+2. Send any text and I'll translate it to your selected languages
+   Example: "Hello world!"
+
+📋 **Available Commands:**
+/start - Welcome message and setup instructions
+/help - Show this help message
+/languages - Show your current language settings
+/clear or /reset - Clear language settings and start over
+
+💬 **How to Use:**
+• **Set Languages:** Just type languages you want to use in plain text
+  Examples: 
+  - "I want English, Spanish, French"
+  - "Russian, Korean, Japanese"
+  - "English and German"
+
+• **Translate Text:** After setting languages, send any message
+  The bot will detect the source language and translate to others
+
+• **Change Languages:** Send new languages anytime to update settings
+
+✨ **Features:**
+• Auto-detect source language
+• Support for 2-3 languages per chat
+• Clean output format (language code + translation)
+• Each chat has independent language settings
+
+Need help? Just ask! 🤖`;
+
+      ctx.reply(helpMessage, { parse_mode: 'Markdown' });
     });
 
     // Handle /languages command
     this.bot.command('languages', (ctx) => {
-      const userId = ctx.from.id.toString();
-      const session = sessionManager.getSession(userId);
+      const chatId = ctx.chat.id.toString();
       
+      // Check authentication if enabled
+      if (config.auth.enabled) {
+        const session = sessionManager.getSession(chatId);
+        if (!session.authenticated) {
+          const chatType = ctx.chat.type;
+          if (chatType === 'private') {
+            ctx.reply(`🔒 Please enter the code word to use this bot.`);
+          } else {
+            ctx.reply(`🔒 This bot requires authentication in group chats. Please provide the code word.`);
+          }
+          return;
+        }
+      }
+      
+      const session = sessionManager.getSession(chatId);
       if (session.selectedLanguages && session.selectedLanguages.length > 0) {
         const languages = session.selectedLanguages.map(lang => `${lang.name} (${lang.code})`).join(', ');
         ctx.reply(`Your selected languages: ${languages}`);
@@ -44,48 +110,162 @@ class TelegramBot {
 
     // Handle /clear command
     this.bot.command('clear', (ctx) => {
-      const userId = ctx.from.id.toString();
-      sessionManager.clearSession(userId);
+      const chatId = ctx.chat.id.toString();
+      
+      // Check authentication if enabled
+      if (config.auth.enabled) {
+        const session = sessionManager.getSession(chatId);
+        if (!session.authenticated) {
+          const chatType = ctx.chat.type;
+          if (chatType === 'private') {
+            ctx.reply(`🔒 Please enter the code word to use this bot.`);
+          } else {
+            ctx.reply(`🔒 This bot requires authentication in group chats. Please provide the code word.`);
+          }
+          return;
+        }
+      }
+      
+      const session = sessionManager.getSession(chatId);
+      // Keep authentication status, only clear language settings
+      const clearedSession = {
+        ...session,
+        selectedLanguages: [],
+        lastActive: new Date()
+      };
+      sessionManager.setSession(chatId, clearedSession);
       ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
     });
 
     // Handle /reset command
     this.bot.command('reset', (ctx) => {
-      const userId = ctx.from.id.toString();
-      sessionManager.clearSession(userId);
+      const chatId = ctx.chat.id.toString();
+      
+      // Check authentication if enabled
+      if (config.auth.enabled) {
+        const session = sessionManager.getSession(chatId);
+        if (!session.authenticated) {
+          const chatType = ctx.chat.type;
+          if (chatType === 'private') {
+            ctx.reply(`🔒 Please enter the code word to use this bot.`);
+          } else {
+            ctx.reply(`🔒 This bot requires authentication in group chats. Please provide the code word.`);
+          }
+          return;
+        }
+      }
+      
+      const session = sessionManager.getSession(chatId);
+      // Keep authentication status, only clear language settings
+      const clearedSession = {
+        ...session,
+        selectedLanguages: [],
+        lastActive: new Date()
+      };
+      sessionManager.setSession(chatId, clearedSession);
       ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
     });
 
     // Handle text messages
     this.bot.on('text', async (ctx) => {
+      const chatId = ctx.chat.id.toString();
+      const userId = ctx.from.id.toString();
+      
       try {
-        const userId = ctx.from.id.toString();
         const userInput = ctx.message.text;
-        logger.info('Processing user message', { userId, message: userInput });
         
-        // Process the translation
-        const result = await translationService.processTranslation(userId, userInput);
-        logger.info('Translation processed successfully', { userId, resultType: result.type });
-        
-        // Send appropriate response based on result type
-        if (result.type === 'language_setup') {
-          const languages = result.languages.map(lang => `${lang.name} (${lang.code})`).join(', ');
-          ctx.reply(`✅ ${result.message}\n\nLanguages set: ${languages}`);
-        } else if (result.type === 'translation') {
-          let response = `Translated from ${result.sourceLanguage}:\n\n`;
+        // Check authentication if enabled
+        if (config.auth.enabled) {
+          const session = sessionManager.getSession(chatId);
           
-          for (const translation of result.translations) {
-            if (translation.skipped) {
-              response += `⏭️ ${translation.language.name} (${translation.language.code}): [Original text]\n`;
+          // If not authenticated, check if this is the code word
+          if (!session.authenticated) {
+            if (userInput.trim().toLowerCase() === config.auth.codeWord.toLowerCase()) {
+              sessionManager.authenticateSession(chatId);
+              ctx.reply(`🔓 Access granted! Welcome to the Translation Bot.
+              
+Type /help to see all available commands or just tell me which 2-3 languages you want to use.
+
+Example: "English, Russian, Japanese"`);
+              return;
             } else {
-              response += `🔄 ${translation.language.name} (${translation.language.code}):\n${translation.text}\n\n`;
+              // Determine chat type for different messages
+              const chatType = ctx.chat.type;
+              if (chatType === 'private') {
+                ctx.reply(`🔒 Please enter the code word to use this bot.`);
+              } else {
+                ctx.reply(`🔒 This bot requires authentication in group chats. Please provide the code word.`);
+              }
+              return;
             }
           }
+        }
+        
+        // Check rate limiting for the user
+        if (config.rateLimit.enabled) {
+          if (rateLimitManager.isUserLimitExceeded(userId)) {
+            const remaining = rateLimitManager.getRemainingMessages(userId);
+            const timeUntilReset = rateLimitManager.getTimeUntilReset(userId);
+            
+            ctx.reply(`🚫 Daily message limit reached!
+
+You have used all ${config.rateLimit.dailyMessageLimit} messages for today.
+Remaining messages: ${remaining}
+Reset in: ${timeUntilReset}
+
+Come back tomorrow to continue using the translation bot! 🌅`);
+            return;
+          }
           
-          ctx.reply(response);
+          // Increment user usage for any message that will consume tokens
+          rateLimitManager.incrementUserUsage(userId);
+        }
+        
+        // Show typing animation immediately and keep it alive during processing
+        ctx.telegram.sendChatAction(chatId, 'typing').catch(() => {});
+        const keepTyping = setInterval(() => {
+          ctx.telegram.sendChatAction(chatId, 'typing').catch(() => {});
+        }, 5000); // Refresh typing animation every 5 seconds (optimized)
+        
+        try {
+          // Process the translation
+          const result = await translationService.processTranslation(chatId, userInput);
+          
+          // Clear typing animation
+          clearInterval(keepTyping);
+          
+          // Log only critical events in production
+          if (result.type === 'language_setup') {
+            logger.info('Languages configured', { chatId, languages: result.languages.map(l => l.code) });
+          }
+          
+          // Send appropriate response based on result type
+          if (result.type === 'language_setup') {
+            const languages = result.languages.map(lang => `${lang.name} (${lang.code})`).join(', ');
+            ctx.reply(`✅ ${result.message}\n\nLanguages set: ${languages}`);
+          } else if (result.type === 'translation') {
+            let response = '';
+            
+            for (const translation of result.translations) {
+              // Skip the source language entirely
+              if (translation.skipped) {
+                continue;
+              }
+              response += `${translation.language.code}: ${translation.text}\n`;
+            }
+            
+            // Remove the last newline
+            response = response.trim();
+            
+            ctx.reply(response);
+          }
+        } catch (processingError) {
+          // Clear typing animation on error
+          clearInterval(keepTyping);
+          throw processingError;
         }
       } catch (error) {
-        logger.error('Error processing message', { userId, error: error.message, stack: error.stack });
+        logger.error('Error processing message', { chatId, userId, error: error.message, stack: error.stack });
         
         // Handle custom errors
         if (error instanceof TranslationBotError) {
@@ -108,22 +288,22 @@ class TelegramBot {
    * @param {string} webhookUrl - Optional webhook URL for webhook mode
    * @param {number} port - Port for webhook server (only used in webhook mode)
    */
-  start(webhookUrl, port) {
+  async start(webhookUrl) {
     // Enable graceful stop
     process.once('SIGINT', () => this.bot.stop('SIGINT'));
     process.once('SIGTERM', () => this.bot.stop('SIGTERM'));
-    
-    if (webhookUrl && port) {
-      // Launch the bot in webhook mode
-      this.bot.launch({
-        webhook: {
-          domain: webhookUrl,
-          port: port
-        }
-      });
-      logger.info(`Telegram bot started in webhook mode at ${webhookUrl}`);
+
+    if (webhookUrl) {
+      // Configure webhook to the full external URL. Express handles the path.
+      try {
+        await this.bot.telegram.setWebhook(webhookUrl);
+        logger.info(`Telegram bot webhook set to ${webhookUrl}`);
+      } catch (err) {
+        logger.error('Failed to set Telegram webhook', { error: err.message });
+      }
+      // Do not call bot.launch with webhook server since Express handles HTTP
     } else {
-      // Launch the bot in polling mode (default)
+      // Polling mode
       this.bot.launch();
       logger.info('Telegram bot started in polling mode');
     }
@@ -142,7 +322,7 @@ class TelegramBot {
    * @returns {Function} Express middleware for handling webhooks
    */
   getWebhookCallback() {
-    return this.bot.webhookCallback('/telegram/webhook');
+    return this.bot.webhookCallback();
   }
 }
 
