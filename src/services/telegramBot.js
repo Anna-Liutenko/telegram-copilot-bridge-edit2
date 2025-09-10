@@ -3,6 +3,7 @@ const config = require('../config/config');
 const translationService = require('./translationService');
 const sessionManager = require('./sessionManager');
 const rateLimitManager = require('./rateLimitManager');
+const userEmojiService = require('./userEmojiService');
 const { TranslationBotError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
@@ -39,6 +40,39 @@ I help you translate messages between languages quickly and easily.
 Type /help for detailed instructions or just send me your languages to get started! 🚀`;
 
       ctx.reply(welcomeMessage, { parse_mode: 'Markdown' });
+    });
+
+    // Handle /auth command for group authentication
+    this.bot.command('auth', async (ctx) => {
+      const chatId = ctx.chat.id.toString();
+      const session = await sessionManager.getSession(chatId);
+      
+      if (config.auth.enabled) {
+        // Extract the code word from the command (e.g., "/auth translate")
+        const args = ctx.message.text.split(' ');
+        if (args.length > 1) {
+          const providedCode = args[1].toLowerCase();
+          if (providedCode === config.auth.codeWord.toLowerCase()) {
+            await sessionManager.authenticateSession(chatId);
+            ctx.reply(`🔓 Access granted! Welcome to the Translation Bot.
+            
+Type /help to see all available commands or just tell me which 2-3 languages you want to use.
+
+Example: "English, Russian, Japanese"`);
+            return;
+          }
+        }
+        
+        // Wrong code or no code provided
+        const chatType = ctx.chat.type;
+        if (chatType === 'private') {
+          ctx.reply(`🔒 Please use: /auth ${config.auth.codeWord}`);
+        } else {
+          ctx.reply(`🔒 Please use: /auth ${config.auth.codeWord}`);
+        }
+      } else {
+        ctx.reply(`🔓 Authentication is disabled for this bot.`);
+      }
     });
 
     // Handle /help command
@@ -82,12 +116,12 @@ Need help? Just ask! 🤖`;
     });
 
     // Handle /languages command
-    this.bot.command('languages', (ctx) => {
+    this.bot.command('languages', async (ctx) => {
       const chatId = ctx.chat.id.toString();
       
       // Check authentication if enabled
       if (config.auth.enabled) {
-        const session = sessionManager.getSession(chatId);
+        const session = await sessionManager.getSession(chatId);
         if (!session.authenticated) {
           const chatType = ctx.chat.type;
           if (chatType === 'private') {
@@ -99,7 +133,7 @@ Need help? Just ask! 🤖`;
         }
       }
       
-      const session = sessionManager.getSession(chatId);
+      const session = await sessionManager.getSession(chatId);
       if (session.selectedLanguages && session.selectedLanguages.length > 0) {
         const languages = session.selectedLanguages.map(lang => `${lang.name} (${lang.code})`).join(', ');
         ctx.reply(`Your selected languages: ${languages}`);
@@ -109,12 +143,12 @@ Need help? Just ask! 🤖`;
     });
 
     // Handle /clear command
-    this.bot.command('clear', (ctx) => {
+    this.bot.command('clear', async (ctx) => {
       const chatId = ctx.chat.id.toString();
       
       // Check authentication if enabled
       if (config.auth.enabled) {
-        const session = sessionManager.getSession(chatId);
+        const session = await sessionManager.getSession(chatId);
         if (!session.authenticated) {
           const chatType = ctx.chat.type;
           if (chatType === 'private') {
@@ -126,24 +160,24 @@ Need help? Just ask! 🤖`;
         }
       }
       
-      const session = sessionManager.getSession(chatId);
+      const session = await sessionManager.getSession(chatId);
       // Keep authentication status, only clear language settings
       const clearedSession = {
         ...session,
         selectedLanguages: [],
         lastActive: new Date()
       };
-      sessionManager.setSession(chatId, clearedSession);
+      await sessionManager.setSession(chatId, clearedSession);
       ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
     });
 
     // Handle /reset command
-    this.bot.command('reset', (ctx) => {
+    this.bot.command('reset', async (ctx) => {
       const chatId = ctx.chat.id.toString();
       
       // Check authentication if enabled
       if (config.auth.enabled) {
-        const session = sessionManager.getSession(chatId);
+        const session = await sessionManager.getSession(chatId);
         if (!session.authenticated) {
           const chatType = ctx.chat.type;
           if (chatType === 'private') {
@@ -155,14 +189,14 @@ Need help? Just ask! 🤖`;
         }
       }
       
-      const session = sessionManager.getSession(chatId);
+      const session = await sessionManager.getSession(chatId);
       // Keep authentication status, only clear language settings
       const clearedSession = {
         ...session,
         selectedLanguages: [],
         lastActive: new Date()
       };
-      sessionManager.setSession(chatId, clearedSession);
+      await sessionManager.setSession(chatId, clearedSession);
       ctx.reply('Your language preferences have been cleared. Please tell me which 2-3 languages you want to use for translation.');
     });
 
@@ -176,12 +210,12 @@ Need help? Just ask! 🤖`;
         
         // Check authentication if enabled
         if (config.auth.enabled) {
-          const session = sessionManager.getSession(chatId);
+          const session = await sessionManager.getSession(chatId);
           
           // If not authenticated, check if this is the code word
           if (!session.authenticated) {
             if (userInput.trim().toLowerCase() === config.auth.codeWord.toLowerCase()) {
-              sessionManager.authenticateSession(chatId);
+              await sessionManager.authenticateSession(chatId);
               ctx.reply(`🔓 Access granted! Welcome to the Translation Bot.
               
 Type /help to see all available commands or just tell me which 2-3 languages you want to use.
@@ -203,9 +237,9 @@ Example: "English, Russian, Japanese"`);
         
         // Check rate limiting for the user
         if (config.rateLimit.enabled) {
-          if (rateLimitManager.isUserLimitExceeded(userId)) {
-            const remaining = rateLimitManager.getRemainingMessages(userId);
-            const timeUntilReset = rateLimitManager.getTimeUntilReset(userId);
+          if (await rateLimitManager.isUserLimitExceeded(userId)) {
+            const remaining = await rateLimitManager.getRemainingMessages(userId);
+            const timeUntilReset = await rateLimitManager.getTimeUntilReset(userId);
             
             ctx.reply(`🚫 Daily message limit reached!
 
@@ -218,7 +252,7 @@ Come back tomorrow to continue using the translation bot! 🌅`);
           }
           
           // Increment user usage for any message that will consume tokens
-          rateLimitManager.incrementUserUsage(userId);
+          await rateLimitManager.incrementUserUsage(userId);
         }
         
         // Show typing animation immediately and keep it alive during processing
@@ -244,7 +278,11 @@ Come back tomorrow to continue using the translation bot! 🌅`);
             const languages = result.languages.map(lang => `${lang.name} (${lang.code})`).join(', ');
             ctx.reply(`✅ ${result.message}\n\nLanguages set: ${languages}`);
           } else if (result.type === 'translation') {
-            let response = '';
+            // Получаем имя пользователя и эмодзи
+            const username = ctx.from.first_name || ctx.from.username || 'Anonymous';
+            const userEmoji = await userEmojiService.getUserEmoji(chatId, userId, username);
+            
+            let response = `${userEmoji} from ${username}\n\n`;
             
             for (const translation of result.translations) {
               // Skip the source language entirely
