@@ -30,7 +30,7 @@ app.get('/health', async (req, res) => {
   
   try {
     // Get session count
-    const sessionCount = sessionManager.getActiveSessionCount();
+    const sessionCount = await sessionManager.getActiveSessionCount();
     
     // Check OpenAI API health
     let openaiStatus = 'healthy';
@@ -48,6 +48,7 @@ app.get('/health', async (req, res) => {
     
     const healthData = {
       overall: (openaiStatus === 'healthy' && telegramStatus === 'healthy') ? 'healthy' : 'unhealthy',
+      version: '1.1.0', // Added version tracking
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       services: {
